@@ -67,7 +67,7 @@ class LegacyDemangler(object):
 
                         for i in digits:
                             if i not in string.hexdigits:
-                                return False    
+                                raise UnableToLegacyDemangle(inpstr)    
 
                         c = int(digits,16)
                         disp += chr(c)

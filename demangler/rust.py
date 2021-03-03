@@ -45,7 +45,7 @@ class RustDemangler(object):
         """ 
         if inpstr.startswith("_ZN") or inpstr.startswith("ZN") or inpstr.startswith("__ZN"):
             return self.LEGACYTYPE
-        elif inpstr.startswith("v0-type-idk"):
+        elif inpstr.startswith("_R") or inpstr.startswith("R") or inpstr.startswith("__R"):
             return self.V0TYPE
         else:
             raise TypeNotFoundError(inpstr)

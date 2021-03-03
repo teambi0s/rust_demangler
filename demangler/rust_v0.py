@@ -43,6 +43,7 @@ class Ident(object):
 
         def f(self, inp: str):
             disp += inp 
+            return "Ok"
             
         out = ['\0'] * self.small_punycode_len
         out_len = 0
@@ -128,7 +129,7 @@ class Ident(object):
 
 
     def display(self):
-        if self.try_small_punycode_decode() is None:
+        if self.try_small_punycode_decode():
             return
         else:
             if self.punycode:
