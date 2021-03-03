@@ -17,8 +17,16 @@ class LegacyDemangler(object):
         disp = ""
         inpstr = inpstr[inpstr.index("N") + 1:]
         self.sanity_check(inpstr)
+
+        if ".llvm." in inpstr:
+            l = inpstr.find(".llvm.")
+            candidate = inpstr[l+6:]
+            for i in candidate: 
+                if i not in string.hexdigits + "@":
+                    raise UnableToLegacyDemangle(inpstr) 
+            inpstr = inpstr[:l]   #removing ThinLTO LLVM internal symbols 
+
         inn = inpstr
-        
         for ele in range(self.elements):
             
             rest = inn
@@ -103,8 +111,29 @@ class LegacyDemangler(object):
                 else:
                     break
             disp += rest    # it is just a word with no `.` or `$`
+
+        self.suffix = inn
+        if self.suffix:
+            if self.suffix.startswith(".") and self.is_symbol_like(self.suffix):
+                disp += self.suffix
+
         return disp  
             
+    def is_symbol_like(self,suffix):
+        for i in suffix:
+            if i.isalnum() or self.is_ascii_punctuation(i):
+                continue
+            else:
+                return False
+
+        return True
+
+    def is_ascii_punctuation(self,c):
+        if c in string.punctuation:
+            return True
+        else:
+            return False
+
     def is_rust_hash(self, s):
         if s.startswith("h"):
             for i in s[1:]:
