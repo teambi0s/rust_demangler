@@ -13,8 +13,8 @@ class V0Demangler(object):
 
     def demangle(self, inpstr : str) -> str:
 
-        self.sanity_check(inpstr)
         inpstr = inpstr[inpstr.index("R") + 1:]
+        self.sanity_check(inpstr)
         
         self.parser = Parser(inpstr,0)
         if inpstr[0].isupper():
@@ -33,7 +33,121 @@ class Ident(object):
     def __init__(self,ascii,punycode):
         self.ascii = ascii
         self.punycode = punycode
+        self.small_punycode_len = 128
+        self.disp = ""
     
+
+    def try_small_punycode_decode(self):
+        global out 
+        global out_len
+
+        def f(self, inp: str):
+            disp += inp 
+            
+        out = ['\0'] * self.small_punycode_len
+        out_len = 0
+        r = self.punycode_decode()
+
+        if r == "Error":
+            return
+        else:
+            return f(out[:out_len])
+
+    def punycode_decode(self):
+
+        def insert(i,c):
+
+            j = out_len
+            out_len += 1
+
+            ## Check there's space left for another character.
+
+            while j > i:
+                out[j] = out[j-1]
+                j -= 1
+            out[i] = c
+            return
+
+        punycode_bytes = self.punycode
+        if punycode_bytes[0] is None :
+            return "Error"
+        len = 0
+        for c in self.ascii:
+            insert(len,c) 
+            len += 1
+
+        base = 36
+        t_min = 1
+        t_max = 26
+        skew = 38
+        damp = 700
+        bias = 72
+        i = 0
+        n = 0x80
+
+        while True:
+            delta = 0
+            w = 1
+            k = 0
+            while True:
+                k += base
+                t = min(max(abs(k-bias),t_min),t_max)
+                d = punycode_btytes.next()
+                if d in string.ascii_lowercase:
+                    d = ord(d)-ord('a')
+                elif d in string.digits:
+                    d = 26+(d-ord('0'))
+                else:
+                    return "Error"
+
+                delta= delta + (d * w)
+                if d < t:
+                    break
+                w *= (base-t)
+
+            len += 1
+            i += delta
+            n += i//len
+            i %= len
+            
+            c = chr(n)
+            insert(i,c) 
+            i += 1
+
+            if punycode_bytes[0] is None:
+                return 
+            delta = delta//damp
+            damp = 2
+
+            delta += delta//leng
+            k = 0
+            while delta > ((base - t_min) * t_max)//2:
+                delta = delta//(base - t_min)
+                k += base
+            bias = k + ((base - t_min + 1) * delta) // (delta + skew)
+
+
+    def display(self):
+        if self.try_small_punycode_decode() is None:
+            return
+        else:
+            if self.punycode:
+                self.disp += "punycode{"
+
+                if self.ascii:
+                    self.disp += self.ascii
+                    self.disp += "-"
+                self.disp += self.punycode
+                self.disp += "}"
+            else:
+                self.disp += self.ascii
+
+def basic_type(tag):
+    tagval = {'b':'bool','c':'char','e':'str','u':'()','a':'i8','s':'i16','l':'i32','x':'i64','n':'i128','i':'isize','h':'u8','t':'u16','m':'u32','y':'u64','o':'u128','j':'usize','f':'f32','d':'f64','z':'!','p':'_','v':'...'}
+    if tag in tagval.keys():
+        return tagval[tag]
+    else:
+        return
 
 class Parser(object):
     
@@ -267,6 +381,7 @@ class Parser(object):
         self.hex_nibbles()
         return 
 
+class Printer(object):
 
     
 
