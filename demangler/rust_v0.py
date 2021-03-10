@@ -27,9 +27,12 @@ class V0Demangler(object):
                     raise UnableTov0Demangle(inpstr) 
             self.inpstr = self.inpstr[:l]   
 
-        self.parser = Parser(inpstr,0)
+        self.parser = Parser(self.inpstr,0)
+        self.parser.skip_path()
         if self.inpstr[0].isupper():
-            self.parser.skip_path() 
+            self.parser.skip_path()
+
+        #print(self.inpstr)
 
     def sanity_check(self, inpstr : str):
 
@@ -108,7 +111,7 @@ class Ident(object):
             while True:
                 k += base
                 t = min(max(abs(k-bias),t_min),t_max)
-                d = punycode_bytes.next()
+                d = punycode_bytes.next_func()
                 if d in string.ascii_lowercase:
                     d = ord(d)-ord('a')
                 elif d in string.digits:
@@ -171,36 +174,37 @@ def basic_type(tag):
 
 class Parser(object):
     
-    def __init__(self,inn,next):
+    def __init__(self,inn,next_val):
         self.inn = inn
-        self.next = next
+        self.next_val = next_val
 
     def peek(self):
-        return self.inn[self.next]  
+        #print("next_val values", self.next_val)
+        return self.inn[self.next_val]
 
     def eat(self, b : bytes):
         if self.peek() == b:
-            self.next += 1
+            self.next_val += 1
             return True
         else:
             return False
 
-    def next(self):
+    def next_func(self):
         b = self.peek()
-        self.next += 1
+        self.next_val += 1
         return b 
 
     def hex_nibbles(self):
-        start = self.next
+        start = self.next_val
         while True:
-            n = self.next()
+            n = self.next_func()
             if n.isdigit() or (n in "abcdef") :
                 continue
             elif n == "_":
                 break
             else:
                 raise UnableTov0Demangle(self.inn)
-        return self.inn[start:self.next-1]
+        return self.inn[start:self.next_val-1]
 
     def digit_10(self):
         d = self.peek()
@@ -208,7 +212,7 @@ class Parser(object):
             d = int(d)
         else:
             return "Error"
-        self.next += 1
+        self.next_val += 1
         return d
     
     def digit_62(self):
@@ -221,7 +225,7 @@ class Parser(object):
             d = 10 + 26 + (ord(d) - ord("A"))
         else:
             raise UnableTov0Demangle(self.inn)
-        self.next += 1
+        self.next_val += 1
         return d
 
     def integer_62(self):
@@ -243,7 +247,7 @@ class Parser(object):
         return self.opt_integer_62('s')
         
     def namespace(self): 
-        n = self.next()
+        n = self.next_func()
         if n.isupper():
             return n 
         elif n.islower():
@@ -252,7 +256,7 @@ class Parser(object):
             raise UnableTov0Demangle(self.inn)
         
     def backref(self):
-        s_start = self.next - 1
+        s_start = self.next_val - 1
         i = self.integer_62()
         if i >= s_start:
             raise UnableTov0Demangle(self.inn)
@@ -261,23 +265,23 @@ class Parser(object):
     
     def ident(self):
         is_punycode = self.eat('u')
-        len = self.digit_10()
-        if len != 0:
+        l = self.digit_10()
+        if l != 0:
             while True:
                 d = self.digit_10()
                 if d == "Error":
                     break
-                len += 10
-                len += int(d)
+                l += 10
+                l += int(d)
 
         self.eat('_')
 
-        start = self.next
-        self.next += len
-        if self.next > len(self.inn):
+        start = self.next_val
+        self.next_val += l
+        if self.next_val > len(self.inn):
             raise UnableTov0Demangle(self.inn)
         
-        ident = self.inn[start:self.next]
+        ident = self.inn[start:self.next_val]
 
         if is_punycode:
             if '_' in ident:
@@ -297,31 +301,33 @@ class Parser(object):
 
     
     def skip_path(self):
-        if self.next().startswith('C'):
+        val = self.next_func()
+        #print(val)
+        if val.startswith('C'):
             self.disambiguator()
-            self.indent()
+            self.ident()
 
-        elif self.next().startswith('N'):
+        elif val.startswith('N'):
             self.namespace()
             self.skip_path()
             self.disambiguator()
             self.ident()
 
-        elif self.next().startswith('M'):
+        elif val.startswith('M'):
             self.disambiguator()
             self.skip_path()
             self.skip_type()
 
-        elif self.next().startswith('Y'):
+        elif val.startswith('Y'):
             self.skip_type()
             self.skip_path()
 
-        elif self.next().startswith('I'):
+        elif val.startswith('I'):
             self.skip_path()
             while not self.eat('E'):
                 self.skip_generic_arg()
 
-        elif self.next().startswith('B'):
+        elif val.startswith('B'):
             self.backref()
         
         else:
@@ -337,7 +343,7 @@ class Parser(object):
         
 
     def skip_type(self):
-        n = self.next()
+        n = self.next_func()
         tag = n
         if basic_type(tag): 
             pass
@@ -379,7 +385,7 @@ class Parser(object):
         elif n == 'B':
             self.backref()
         else:
-            self.next -= 1
+            self.next_val -= 1
             self.skip_path()
     
     def skip_const(self):
@@ -387,7 +393,7 @@ class Parser(object):
             self.backref()
             return 
 
-        ty_tag = self.next()
+        ty_tag = self.next_func()
         if ty_tag == 'p' :
             return 
         type1 = ['h','t','m','y','o','j','b','c']
@@ -522,7 +528,7 @@ class Printer(object):
         return i
 
     def print_path(self,in_value):
-        tag = self.parse(next)
+        tag = self.parse(next_val)
         if tag=="C":
             dis = self.parse(disambiguator)
             name = self.parse(ident)
@@ -594,7 +600,7 @@ class Printer(object):
             self.print_type()
 
     def print_type(self):
-        tag = self.parse(next)
+        tag = self.parse(next_val)
 
         if basic_type(tag):
             ty = basic_type(tag)
@@ -656,7 +662,7 @@ class Printer(object):
             self.backref_printer().print_type()
         else:
             p = self.parser_mut()
-            p.next -= 1
+            p.next_val -= 1
             self.print_path(False)
 
 
@@ -695,7 +701,7 @@ class Printer(object):
         if self.eat('B'):
             return self.backref_printer().print_const()
 
-        ty_tag = self.parse(next)
+        ty_tag = self.parse(next_val)
         if ty_tag == 'p':
             self.out += "_"
             return 
@@ -763,4 +769,3 @@ class Printer(object):
             self.out += c
         except Exception:
             invalid()
-        
