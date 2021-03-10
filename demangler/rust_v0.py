@@ -11,13 +11,24 @@ class UnableTov0Demangle(Exception):
 
 class V0Demangler(object):
 
-    def demangle(self, inpstr : str) -> str:
+    def __init__(self):
+        self.disp = ""
 
-        inpstr = inpstr[inpstr.index("R") + 1:]
-        self.sanity_check(inpstr)
+    def demangle(self, inpstr : str) -> str:
         
+        self.inpstr = inpstr[inpstr.index("R") + 1:]
+        self.sanity_check(self.inpstr)
+
+        if ".llvm." in inpstr:
+            l = inpstr.find(".llvm.")
+            candidate = inpstr[l+6:]
+            for i in candidate: 
+                if i not in string.hexdigits + "@":
+                    raise UnableTov0Demangle(inpstr) 
+            self.inpstr = self.inpstr[:l]   
+
         self.parser = Parser(inpstr,0)
-        if inpstr[0].isupper():
+        if self.inpstr[0].isupper():
             self.parser.skip_path() 
 
     def sanity_check(self, inpstr : str):
@@ -28,6 +39,11 @@ class V0Demangler(object):
         for i in inpstr:
             if(ord(i) & 0x80 != 0):
                 raise UnableTov0Demangle(inpstr)
+
+    def display(self):
+        parser = Parser(self.inpstr,0)
+        printer = Printer(parser,self.disp,0)
+        printer.print_path(True)
 
 class Ident(object):
     def __init__(self,ascii,punycode):
@@ -41,23 +57,22 @@ class Ident(object):
         global out 
         global out_len
 
-        def f(self, inp: str):
-            disp += inp 
+        def f(self,inp):
+            self.disp += inp 
             return "Ok"
             
         out = ['\0'] * self.small_punycode_len
         out_len = 0
-        r = self.punycode_decode()
+        r = self.punycode_decode(out,out_len)
 
         if r == "Error":
             return
         else:
             return f(out[:out_len])
 
-    def punycode_decode(self):
+    def punycode_decode(self,out,out_len):
 
-        def insert(i,c):
-
+        def insert(i,c):#removing ThinLTO LLVM internal symbols 
             j = out_len
             out_len += 1
 
@@ -93,7 +108,7 @@ class Ident(object):
             while True:
                 k += base
                 t = min(max(abs(k-bias),t_min),t_max)
-                d = punycode_btytes.next()
+                d = punycode_bytes.next()
                 if d in string.ascii_lowercase:
                     d = ord(d)-ord('a')
                 elif d in string.digits:
@@ -111,7 +126,11 @@ class Ident(object):
             n += i//len
             i %= len
             
-            c = chr(n)
+            try:
+                c = chr(n)
+            except Exception:
+                raise UnableTov0Demangle("Error")
+
             insert(i,c) 
             i += 1
 
@@ -120,7 +139,7 @@ class Ident(object):
             delta = delta//damp
             damp = 2
 
-            delta += delta//leng
+            delta += delta//len
             k = 0
             while delta > ((base - t_min) * t_max)//2:
                 delta = delta//(base - t_min)
@@ -233,11 +252,12 @@ class Parser(object):
             raise UnableTov0Demangle(self.inn)
         
     def backref(self):
-        s_start = self.next + 1
+        s_start = self.next - 1
         i = self.integer_62()
         if i >= s_start:
             raise UnableTov0Demangle(self.inn)
-        self.next = i
+
+        return Parser(self.inn,i)
     
     def ident(self):
         is_punycode = self.eat('u')
@@ -305,7 +325,7 @@ class Parser(object):
             self.backref()
         
         else:
-            raise UnableTov0Demangle(inpstr) 
+            raise UnableTov0Demangle(self.inn) 
         
     def skip_generic_arg(self):
         if self.eat('L'):
@@ -383,7 +403,364 @@ class Parser(object):
         return 
 
 class Printer(object):
+    def __init__(self,parser,out,bound):
+        self.parser = parser
+        self.out = out
+        self.bound_lifetime_depth = bound
 
+    def parser(self,method):
+        p = self.parser_mut() 
+        try:
+            return self.method()
+        except Exception:
+            self.out += "?"
+
+    def invalid(self):
+        self.out += '?'
+        raise UnableTov0Demangle("Error")
+
+    def parser_mut(self):
+        return self.parser
+
+    def eat(self,b):
+        par = self.parser_mut()
+        if par.eat('b'):
+            return True
+        else:
+            return False
     
+    def backref_printer(self):
+        p = self.parser_mut()
+        return Printer(p.backref(),self.out,self.bound_lifetime_depth)
+
+    def print_lifetime_from_index(self,lt):
+        self.out += "'"
+        if lt == 0:
+            self.out += "_" 
+        depth = self.bound_lifetime_depth - lt
+        if depth :
+            if depth<26:
+                c = ord("a") + depth
+                self.out += str(c)     
+            else:
+                self.out += "_"
+                self.out += str(depth)
+        else:
+            invalid()
+
+    def in_binder(self,val):
+
+        def f1():
+            is_unsafe = self.eat('U')
+            if self.eat('K'):
+                if self.eat('C'):
+                    abi = 'C'
+                else:
+                    ab = self.parse(ident)
+                    if not ab.ascii or ab.punycode:
+                        invalid()
+                    abi = ab.ascii
+            else:
+                abi = None
+            
+            if is_unsafe:
+                this.out += "unsafe "
+            
+            if abi:
+                self.out += 'extern \"'
+                parts = abi.split('_')
+                for part in parts:
+                    self.out += part
+                    self.out += '-'
+                
+                self.out += '\"'
+
+            self.out += "fn("
+            self.print_sep_list(self.print_type,", ") 
+            self.out += ")"
+
+            if self.eat('u'):
+                pass
+            else:
+                self.out += " -> "
+                self.print_type() 
+
+            return
+
+        def f2():
+            self.print_sep_list(self.print_dyn_trait," + ")
+            return
+
+        bound_lifetimes = self.parse(opt_integer_62('G'))
+
+        if bound_lifetimes > 0:
+            self.out += 'for<'
+            for i in range(bound_lifetimes):
+                if i > 0:
+                    self.out += ', '
+                self.bound_lifetime_depth += 1
+                self.print_lifetime_from_index(1)
+            
+            self.out += '> '
+        
+        if val == 1:
+            r = f1()
+        if val == 2:
+            r = f2()
+        self.bound_lifetime_depth -= bound_lifetimes
+
+        return r
+
+    def print_sep_list(self,f,sep):
+        i = 0
+        while not self.eat('E'):
+            if i > 0:
+                self.out += str(sep)
+            
+            f()
+            i += 1
+        return i
+
+    def print_path(self,in_value):
+        tag = self.parse(next)
+        if tag=="C":
+            dis = self.parse(disambiguator)
+            name = self.parse(ident)
+            self.out += name
+            if not self.out.alternate():
+                self.out += '['
+                self.out += ']'
+
+        elif tag == 'N':
+            ns = self.parse(namespace)
+            self.print_path(in_value)
+            dis = self.parse(disambiguator)
+            name = self.parse(ident)        
+            if ns:
+                self.out += "::{"
+                if ns == "C":
+                    self.out += "closure"
+                elif ns == "S":
+                    self.out += "shim"
+                else:
+                    self.out += ns
+                if not name.ascii or (not name.punycode):
+                    self.out += ":"
+                    self.out += name
+
+                self.out += "#"
+                self.out += dis
+                self.out += "}"
+            else:
+                if not name.ascii or (not name.punycode):
+                    self.out += "::"
+                    self.out += name
+
+        elif tag == "M" or tag == "X" or tag == "Y":
+            if tag!="Y":
+                self.parse(disambiguator)
+                self.parse(skip_path)
+        
+            self.out += "<"
+            self.print_type()
+
+            if tag != "M":
+                self.out += " as "
+                self.print_path(False)
+
+            self.out += ">"
+
+        elif tag == "I":
+            self.print_path(in_value)
+            if in_value:
+                self.out += "::"
+
+            self.out += "<"
+            self.print_sep_list(self.print_generic_arg, ", ")
+            self.out += ">"
+        elif tag == "B":
+            self.backref_printer().print_path(in_value)
+        
+        else:
+            invalid(self)
+
+    def print_generic_arg(self):
+        if self.eat('L'):
+            lt = self.parse(integer_62)
+            self.print_lifetime_from_index(lt)
+        elif self.eat('K'):
+            self.print_const()
+        else:
+            self.print_type()
+
+    def print_type(self):
+        tag = self.parse(next)
+
+        if basic_type(tag):
+            ty = basic_type(tag)
+            self.out += ty
+
+        if tag == 'R' or tag == 'Q':
+            self.out += '&'
+            if self.eat('L'):
+                lt = self.parse(integer_62)
+                if lt != 0:
+                    self.print_lifetime_from_index(lt)
+                    self.out += ' '
+            
+            if tag != 'R':
+                self.out += "mut "
+
+            self.print_type()
+        
+        elif tag == 'P' or tag == 'O':
+            self.out += '*'
+            if tag != 'P':
+                self.out += "mut "
+            else:
+                self.out += "const "
+            self.print_type()
+
+        elif tag == 'A' or tag == 'S':
+            self.out += '['
+            self.print_type()
+
+            if tag == 'A':
+                self.out += '; '
+                self.print_const()
+            self.out += ']'
+        
+        elif tag == 'T':
+            self.out += '('
+            count = self.print_sep_list(self.print_type,", ")
+            if count == 1:
+                self.out += ","
+            self.out += ")"
+
+        elif tag == 'F':
+            self.in_binder(1) 
+
+        elif tag == 'D':
+            self.out += "dyn "
+            self.in_binder(2)
+ 
+            if not self.eat('L'):
+                invalid()
+            
+            lt = self.parse(integer_62)
+            if lt != 0:
+                self.out += " + "
+                self.print_lifetime_from_index(lt)
+        
+        elif tag == 'B':
+            self.backref_printer().print_type()
+        else:
+            p = self.parser_mut()
+            p.next -= 1
+            self.print_path(False)
 
 
+    def print_path_maybe_open_generics(self):
+        if self.eat('B'):
+            self.backref_printer().print_path_maybe_open_generics()
+
+        elif self.eat('I'):
+            self.print_path(False)
+            self.out += "<"
+            self.print_sep_list(self.print_generic_arg,", ")
+            return True
+        else:
+            self.print_path(False)
+            return False
+    
+    def print_dyn_trait(self):
+        open = self.print_path_maybe_open_generics()
+
+        while self.eat('p'):
+            if not open:
+                self.out += "<"
+                open = True
+            else:
+                self.out += ", "
+            
+            name = self.parse(ident)
+            self.out += name
+            self.out += " = "
+            self.print_type()
+
+        if open:
+            self.out += ">"
+
+    def print_const(self):
+        if self.eat('B'):
+            return self.backref_printer().print_const()
+
+        ty_tag = self.parse(next)
+        if ty_tag == 'p':
+            self.out += "_"
+            return 
+        
+        type1 = ['h','t','m','y','o','j']
+        type2 = ['a''s','l','x','n','i']
+
+        if ty_tag in type1:
+            self.print_const_unit()
+        elif ty_tag in type2:
+            self.print_const_int()
+        elif ty_tag == 'b':
+            self.print_const_bool()
+        elif ty_tag == 'c':
+            self.print_const_char()
+        else:
+            invalid()
+        
+        if not self.out.alternate():
+            self.out += ": "
+            ty = basic_type(ty_tag)
+            self.out += ty
+
+        return 
+
+    def print_const_unit(self):
+        hex = self.parse(hex_nibbles)
+
+        if len(hex) > 16:
+            self.out += "0x"
+            self.out += hex
+
+        v = 0
+        for c in hex:
+            v = (v<<4) or (int(c))
+        self.out += v
+
+    def print_const_int(self):
+        if self.eat('n'):
+            self.out += "-"
+        self.print_const_unit()
+
+    def print_const_bool(self):
+        hex = self.parse(hex_nibbles)
+
+        if hex == '0':
+            self.out += "false"
+        elif hex == '1':
+            self.out += "true"
+        else:
+            invalid()
+        
+    def print_const_char(self):
+        hex = self.parse(hex_nibbles)
+
+        if len(hex) > 8:
+            invalid()
+        
+        v = 0
+        for c in hex:
+            v = (v<<4) or (int(c))
+        
+        try:
+            c = chr(v)
+            self.out += c
+        except Exception:
+            invalid()
+        
