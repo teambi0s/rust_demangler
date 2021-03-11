@@ -112,7 +112,7 @@ class LegacyDemangler(object):
                     break
             disp += rest    # it is just a word with no `.` or `$`
 
-        self.suffix = inn
+        self.suffix = inn[1:]
         if self.suffix:
             if self.suffix.startswith(".") and self.is_symbol_like(self.suffix):
                 disp += self.suffix
