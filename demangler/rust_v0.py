@@ -29,12 +29,8 @@ class V0Demangler(object):
 
         self.parser = Parser(self.inpstr,0)
         self.parser.skip_path()
-        print("----------------REACHED--------------")
-        #print("this is len ---> " + str(len(self.parser.inn)) + "this is next_val ---> " + str(self.parser.next_val))
         if (len(self.parser.inn) > self.parser.next_val) and self.parser.inn[self.parser.next_val].isupper():
-            print("this is chr ---> " + self.parser.inn[self.parser.next_val])
             self.parser.skip_path()
-            #print("this is next_val ---> " + str(self.parser.next_val))
 
     def sanity_check(self, inpstr : str):
         if not inpstr[0].isupper():
@@ -180,7 +176,6 @@ class Parser(object):
         self.next_val = next_val
 
     def peek(self):
-        #print("next_val values", self.next_val)
         return self.inn[self.next_val]
 
     def eat(self, b : bytes):
@@ -317,6 +312,12 @@ class Parser(object):
             self.skip_path()
             self.skip_type()
 
+        elif val.startswith('X'):
+            self.disambiguator()
+            self.skip_path()
+            self.skip_type()
+            self.skip_path()
+
         elif val.startswith('Y'):
             self.skip_type()
             self.skip_path()
@@ -331,7 +332,7 @@ class Parser(object):
         
         else:
             raise UnableTov0Demangle(self.inn) 
-        
+
     def skip_generic_arg(self):
         if self.eat('L'):
             self.integer_62()
