@@ -1,7 +1,7 @@
 import string
 
 class UnableTov0Demangle(Exception):
-    def __init__(self, given_str, message="Not able the given string using v0Demangler"):
+    def __init__(self, given_str, message="Not able to demangle the given string using v0Demangler"):
         self.message = message
         self.given_str = given_str
         super().__init__(self.message)
@@ -20,8 +20,8 @@ class V0Demangler(object):
         self.sanity_check(self.inpstr)
 
         if ".llvm." in inpstr:
-            l = inpstr.find(".llvm.")
-            candidate = inpstr[l+6:]
+            l = self.inpstr.find(".llvm.")
+            candidate = self.inpstr[l+6:]
             for i in candidate: 
                 if i not in string.hexdigits + "@":
                     raise UnableTov0Demangle(inpstr) 
@@ -29,13 +29,14 @@ class V0Demangler(object):
 
         self.parser = Parser(self.inpstr,0)
         self.parser.skip_path()
-        if self.inpstr[0].isupper():
+        print("----------------REACHED--------------")
+        #print("this is len ---> " + str(len(self.parser.inn)) + "this is next_val ---> " + str(self.parser.next_val))
+        if (len(self.parser.inn) > self.parser.next_val) and self.parser.inn[self.parser.next_val].isupper():
+            print("this is chr ---> " + self.parser.inn[self.parser.next_val])
             self.parser.skip_path()
-
-        #print(self.inpstr)
+            #print("this is next_val ---> " + str(self.parser.next_val))
 
     def sanity_check(self, inpstr : str):
-
         if not inpstr[0].isupper():
             raise UnableTov0Demangle(inpstr)
 
@@ -60,7 +61,7 @@ class Ident(object):
         global out 
         global out_len
 
-        def f(self,inp):
+        def f(inp):
             self.disp += inp 
             return "Ok"
             
@@ -302,11 +303,9 @@ class Parser(object):
     
     def skip_path(self):
         val = self.next_func()
-        #print(val)
         if val.startswith('C'):
             self.disambiguator()
             self.ident()
-
         elif val.startswith('N'):
             self.namespace()
             self.skip_path()
@@ -414,10 +413,10 @@ class Printer(object):
         self.out = out
         self.bound_lifetime_depth = bound
 
-    def parser(self,method):
+    def parser_macro(self,method):
         p = self.parser_mut() 
         try:
-            return self.method()
+            return getattr(p,method)()
         except Exception:
             self.out += "?"
 
@@ -452,7 +451,7 @@ class Printer(object):
                 self.out += "_"
                 self.out += str(depth)
         else:
-            invalid()
+            self.invalid()
 
     def in_binder(self,val):
 
@@ -462,15 +461,15 @@ class Printer(object):
                 if self.eat('C'):
                     abi = 'C'
                 else:
-                    ab = self.parse(ident)
+                    ab = self.parser_macro("ident")
                     if not ab.ascii or ab.punycode:
-                        invalid()
+                        self.invalid()
                     abi = ab.ascii
             else:
                 abi = None
             
             if is_unsafe:
-                this.out += "unsafe "
+                self.out += "unsafe "
             
             if abi:
                 self.out += 'extern \"'
@@ -482,7 +481,7 @@ class Printer(object):
                 self.out += '\"'
 
             self.out += "fn("
-            self.print_sep_list(self.print_type,", ") 
+            self.print_sep_list("print_type",", ") 
             self.out += ")"
 
             if self.eat('u'):
@@ -491,13 +490,13 @@ class Printer(object):
                 self.out += " -> "
                 self.print_type() 
 
-            return
+            return ""
 
         def f2():
-            self.print_sep_list(self.print_dyn_trait," + ")
-            return
+            self.print_sep_list("print_dyn_trait"," + ")
+            return ""
 
-        bound_lifetimes = self.parse(opt_integer_62('G'))
+        bound_lifetimes = self.parser_macro("opt_integer_62('G')")
 
         if bound_lifetimes > 0:
             self.out += 'for<'
@@ -523,25 +522,25 @@ class Printer(object):
             if i > 0:
                 self.out += str(sep)
             
-            f()
+            getattr(self,f)() 
             i += 1
         return i
 
     def print_path(self,in_value):
-        tag = self.parse(next_val)
+        tag = self.parser_macro("next_val")
         if tag=="C":
-            dis = self.parse(disambiguator)
-            name = self.parse(ident)
+            dis = self.parser_macro("disambiguator")
+            name = self.parser_macro("ident")
             self.out += name
             if not self.out.alternate():
                 self.out += '['
                 self.out += ']'
 
         elif tag == 'N':
-            ns = self.parse(namespace)
+            ns = self.parser_macro("namespace")
             self.print_path(in_value)
-            dis = self.parse(disambiguator)
-            name = self.parse(ident)        
+            dis = self.parser_macro("disambiguator")
+            name = self.parser_macro("ident")        
             if ns:
                 self.out += "::{"
                 if ns == "C":
@@ -564,8 +563,8 @@ class Printer(object):
 
         elif tag == "M" or tag == "X" or tag == "Y":
             if tag!="Y":
-                self.parse(disambiguator)
-                self.parse(skip_path)
+                self.parser_macro("disambiguator")
+                self.parser_macro("skip_path")
         
             self.out += "<"
             self.print_type()
@@ -582,17 +581,17 @@ class Printer(object):
                 self.out += "::"
 
             self.out += "<"
-            self.print_sep_list(self.print_generic_arg, ", ")
+            self.print_sep_list("print_generic_arg", ", ")
             self.out += ">"
         elif tag == "B":
             self.backref_printer().print_path(in_value)
         
         else:
-            invalid(self)
+            self.invalid()
 
     def print_generic_arg(self):
         if self.eat('L'):
-            lt = self.parse(integer_62)
+            lt = self.parser_macro("integer_62")
             self.print_lifetime_from_index(lt)
         elif self.eat('K'):
             self.print_const()
@@ -600,7 +599,7 @@ class Printer(object):
             self.print_type()
 
     def print_type(self):
-        tag = self.parse(next_val)
+        tag = self.parser_macro("next_val")
 
         if basic_type(tag):
             ty = basic_type(tag)
@@ -609,7 +608,7 @@ class Printer(object):
         if tag == 'R' or tag == 'Q':
             self.out += '&'
             if self.eat('L'):
-                lt = self.parse(integer_62)
+                lt = self.parser_macro("integer_62")
                 if lt != 0:
                     self.print_lifetime_from_index(lt)
                     self.out += ' '
@@ -638,7 +637,7 @@ class Printer(object):
         
         elif tag == 'T':
             self.out += '('
-            count = self.print_sep_list(self.print_type,", ")
+            count = self.print_sep_list("print_type",", ")
             if count == 1:
                 self.out += ","
             self.out += ")"
@@ -651,9 +650,9 @@ class Printer(object):
             self.in_binder(2)
  
             if not self.eat('L'):
-                invalid()
+                self.invalid()
             
-            lt = self.parse(integer_62)
+            lt = self.parser_macro("integer_62")
             if lt != 0:
                 self.out += " + "
                 self.print_lifetime_from_index(lt)
@@ -673,7 +672,7 @@ class Printer(object):
         elif self.eat('I'):
             self.print_path(False)
             self.out += "<"
-            self.print_sep_list(self.print_generic_arg,", ")
+            self.print_sep_list("print_generic_arg",", ")
             return True
         else:
             self.print_path(False)
@@ -689,7 +688,7 @@ class Printer(object):
             else:
                 self.out += ", "
             
-            name = self.parse(ident)
+            name = self.parser_macro("ident")
             self.out += name
             self.out += " = "
             self.print_type()
@@ -701,7 +700,7 @@ class Printer(object):
         if self.eat('B'):
             return self.backref_printer().print_const()
 
-        ty_tag = self.parse(next_val)
+        ty_tag = self.parser_macro("next_val")
         if ty_tag == 'p':
             self.out += "_"
             return 
@@ -710,7 +709,7 @@ class Printer(object):
         type2 = ['a''s','l','x','n','i']
 
         if ty_tag in type1:
-            self.print_const_unit()
+            self.print_const_uint()
         elif ty_tag in type2:
             self.print_const_int()
         elif ty_tag == 'b':
@@ -718,7 +717,7 @@ class Printer(object):
         elif ty_tag == 'c':
             self.print_const_char()
         else:
-            invalid()
+            self.invalid()
         
         if not self.out.alternate():
             self.out += ": "
@@ -727,8 +726,8 @@ class Printer(object):
 
         return 
 
-    def print_const_unit(self):
-        hex = self.parse(hex_nibbles)
+    def print_const_uint(self):
+        hex = self.parser_macro("hex_nibbles")
 
         if len(hex) > 16:
             self.out += "0x"
@@ -736,36 +735,36 @@ class Printer(object):
 
         v = 0
         for c in hex:
-            v = (v<<4) or (int(c))
+            v = (v<<4) ^ (int(c))
         self.out += v
 
     def print_const_int(self):
         if self.eat('n'):
             self.out += "-"
-        self.print_const_unit()
+        self.print_const_uint()
 
     def print_const_bool(self):
-        hex = self.parse(hex_nibbles)
+        hex = self.parser_macro("hex_nibbles")
 
         if hex == '0':
             self.out += "false"
         elif hex == '1':
             self.out += "true"
         else:
-            invalid()
+            self.invalid()
         
     def print_const_char(self):
-        hex = self.parse(hex_nibbles)
+        hex = self.parser_macro("hex_nibbles")
 
         if len(hex) > 8:
-            invalid()
+            self.invalid()
         
         v = 0
         for c in hex:
-            v = (v<<4) or (int(c))
+            v = (v<<4) ^ (int(c))
         
         try:
             c = chr(v)
             self.out += c
         except Exception:
-            invalid()
+            self.invalid()

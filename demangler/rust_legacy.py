@@ -1,7 +1,7 @@
 import string
 
 class UnableToLegacyDemangle(Exception):
-    def __init__(self, given_str, message="Not able the given string using LegacyDemangler"):
+    def __init__(self, given_str, message="Not able to demangle the given string using LegacyDemangler"):
         self.message = message
         self.given_str = given_str
         super().__init__(self.message)
