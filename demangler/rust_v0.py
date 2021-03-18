@@ -290,11 +290,11 @@ class Parser(object):
             if not idt.punycode:
                 raise UnableTov0Demangle(self.inn)
             
-            return idt.disp
+            return idt
 
         else:
             idt = Ident(ident,"")
-            return idt.disp
+            return idt
 
     
     def skip_path(self):
@@ -534,10 +534,10 @@ class Printer(object):
         if tag=="C":
             dis = self.parser_macro("disambiguator")
             name = self.parser_macro("ident")
-            self.out += name
-            if not self.out.alternate():
-                self.out += '['
-                self.out += ']'
+            self.out += name.disp
+            # if not self.out.alternate():
+            self.out += '['
+            self.out += ']'
 
         elif tag == 'N':
             ns = self.parser_macro("namespace")
@@ -562,7 +562,7 @@ class Printer(object):
             else:
                 if not name.ascii or (not name.punycode):
                     self.out += "::"
-                    self.out += name
+                    self.out += name.disp
 
         elif tag == "M" or tag == "X" or tag == "Y":
             if tag!="Y":
@@ -722,10 +722,10 @@ class Printer(object):
         else:
             self.invalid()
         
-        if not self.out.alternate():
-            self.out += ": "
-            ty = basic_type(ty_tag)
-            self.out += ty
+        # if not self.out.alternate():
+        self.out += ": "
+        ty = basic_type(ty_tag)
+        self.out += ty
 
         return 
 
