@@ -290,11 +290,11 @@ class Parser(object):
             if not idt.punycode:
                 raise UnableTov0Demangle(self.inn)
             
-            return idt
+            return idt.disp
 
         else:
             idt = Ident(ident,"")
-            return idt
+            return idt.disp
 
     
     def skip_path(self):
@@ -530,7 +530,7 @@ class Printer(object):
         return i
 
     def print_path(self,in_value):
-        tag = self.parser_macro("next_val")
+        tag = self.parser_macro("next_func")
         if tag=="C":
             dis = self.parser_macro("disambiguator")
             name = self.parser_macro("ident")
