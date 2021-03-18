@@ -32,6 +32,11 @@ class V0Demangler(object):
         if (len(self.parser.inn) > self.parser.next_val) and self.parser.inn[self.parser.next_val].isupper():
             self.parser.skip_path()
 
+        parser = Parser(self.inpstr,0)
+        printer = Printer(parser,self.disp,0)
+        printer.print_path(True)
+        return printer.out
+
     def sanity_check(self, inpstr : str):
         if not inpstr[0].isupper():
             raise UnableTov0Demangle(inpstr)
@@ -39,11 +44,7 @@ class V0Demangler(object):
         for i in inpstr:
             if(ord(i) & 0x80 != 0):
                 raise UnableTov0Demangle(inpstr)
-
-    def display(self):
-        parser = Parser(self.inpstr,0)
-        printer = Printer(parser,self.disp,0)
-        printer.print_path(True)
+       
 
 class Ident(object):
     def __init__(self,ascii,punycode):
@@ -423,6 +424,7 @@ class Printer(object):
 
     def invalid(self):
         self.out += '?'
+        print(self.out)
         raise UnableTov0Demangle("Error")
 
     def parser_mut(self):
