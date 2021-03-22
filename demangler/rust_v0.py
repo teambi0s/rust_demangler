@@ -13,6 +13,7 @@ class V0Demangler(object):
 
     def __init__(self):
         self.disp = ""
+        self.suffix = ""
 
     def demangle(self, inpstr : str) -> str:
         
@@ -35,7 +36,11 @@ class V0Demangler(object):
         parser = Parser(self.inpstr,0)
         printer = Printer(parser,self.disp,0)
         printer.print_path(True)
-        return printer.out
+
+        if "." in self.inpstr:
+            self.suffix = self.inpstr[self.inpstr.index("."):len(self.inpstr)]
+        
+        return printer.out + self.suffix
 
     def sanity_check(self, inpstr : str):
         if not inpstr[0].isupper():
@@ -52,46 +57,50 @@ class Ident(object):
         self.punycode = punycode
         self.small_punycode_len = 128
         self.disp = ""
-    
 
     def try_small_punycode_decode(self):
         global out 
         global out_len
 
         def f(inp):
+            inp = "".join(inp)
             self.disp += inp 
             return "Ok"
             
         out = ['\0'] * self.small_punycode_len
         out_len = 0
-        r = self.punycode_decode(out,out_len)
+        r = self.punycode_decode()
 
         if r == "Error":
             return
         else:
             return f(out[:out_len])
 
-    def punycode_decode(self,out,out_len):
+    def insert(self,i,c):
+        global out 
+        global out_len
 
-        def insert(i,c):#removing ThinLTO LLVM internal symbols 
-            j = out_len
-            out_len += 1
+        j = out_len
+        out_len += 1
 
-            ## Check there's space left for another character.
+        while j > i:
+            out[j] = out[j-1]
+            j -= 1
+        out[i] = c
+        return
 
-            while j > i:
-                out[j] = out[j-1]
-                j -= 1
-            out[i] = c
-            return
-
+    def punycode_decode(self):
+        count = 0
         punycode_bytes = self.punycode
-        if punycode_bytes[0] is None :
+        try:
+            punycode_bytes[count]
+        except Exception:
             return "Error"
-        len = 0
+
+        lent = 0
         for c in self.ascii:
-            insert(len,c) 
-            len += 1
+            self.insert(lent,c) 
+            lent += 1
 
         base = 36
         t_min = 1
@@ -101,19 +110,19 @@ class Ident(object):
         bias = 72
         i = 0
         n = 0x80
-
         while True:
             delta = 0
             w = 1
             k = 0
             while True:
                 k += base
-                t = min(max(abs(k-bias),t_min),t_max)
-                d = punycode_bytes.next_func()
+                t = min(max((k-bias),t_min),t_max)
+                d = punycode_bytes[count] 
+                count += 1
                 if d in string.ascii_lowercase:
                     d = ord(d)-ord('a')
                 elif d in string.digits:
-                    d = 26+(d-ord('0'))
+                    d = 26+(ord(d)-ord('0'))
                 else:
                     return "Error"
 
@@ -121,26 +130,29 @@ class Ident(object):
                 if d < t:
                     break
                 w *= (base-t)
-
-            len += 1
+            
+            lent += 1
             i += delta
-            n += i//len
-            i %= len
+            n += i//lent
+            i %= lent
             
             try:
                 c = chr(n)
             except Exception:
-                raise UnableTov0Demangle("Error")
+                return "Error"
 
-            insert(i,c) 
+            self.insert(i,c) 
             i += 1
 
-            if punycode_bytes[0] is None:
+            try:
+                punycode_bytes[count]
+            except Exception:
                 return 
+            
             delta = delta//damp
             damp = 2
 
-            delta += delta//len
+            delta += delta//lent
             k = 0
             while delta > ((base - t_min) * t_max)//2:
                 delta = delta//(base - t_min)
@@ -268,9 +280,9 @@ class Parser(object):
                 d = self.digit_10()
                 if d == "Error":
                     break
-                l += 10
-                l += int(d)
-
+                l *= 10
+                l += d
+      
         self.eat('_')
 
         start = self.next_val
@@ -279,10 +291,9 @@ class Parser(object):
             raise UnableTov0Demangle(self.inn)
         
         ident = self.inn[start:self.next_val]
-
         if is_punycode:
             if '_' in ident:
-                i = ident.index('_')
+                i = len(ident) - ident[::-1].index("_") - 1 
                 idt = Ident(ident[:i],ident[i+1:])
             else:
                 idt = Ident("",ident)
@@ -398,7 +409,7 @@ class Parser(object):
         if ty_tag == 'p' :
             return 
         type1 = ['h','t','m','y','o','j','b','c']
-        type2 = ['a''s','l','x','n','i']
+        type2 = ['a','s','l','x','n','i']
 
         if ty_tag in type1: 
             pass
@@ -417,6 +428,15 @@ class Printer(object):
 
     def parser_macro(self,method):
         p = self.parser_mut() 
+        
+        if "(" in method:
+           arg = method.split("\'")[1]
+           method = method.split("\'")[0][:-1] 
+           try:
+               return getattr(p,method)(*arg)
+           except Exception:
+               self.out += "?"
+
         try:
             return getattr(p,method)()
         except Exception:
@@ -432,7 +452,7 @@ class Printer(object):
 
     def eat(self,b):
         par = self.parser_mut()
-        if par.eat('b'):
+        if par.eat(b):
             return True
         else:
             return False
@@ -524,7 +544,6 @@ class Printer(object):
         while not self.eat('E'):
             if i > 0:
                 self.out += str(sep)
-            
             getattr(self,f)() 
             i += 1
         return i
@@ -534,10 +553,8 @@ class Printer(object):
         if tag=="C":
             dis = self.parser_macro("disambiguator")
             name = self.parser_macro("ident")
+            name.display()
             self.out += name.disp
-            # if not self.out.alternate():
-            self.out += '['
-            self.out += ']'
 
         elif tag == 'N':
             ns = self.parser_macro("namespace")
@@ -554,14 +571,16 @@ class Printer(object):
                     self.out += ns
                 if not name.ascii or (not name.punycode):
                     self.out += ":"
-                    self.out += name
+                    name.display()
+                    self.out += name.disp
 
                 self.out += "#"
-                self.out += dis
+                self.out += str(dis)
                 self.out += "}"
             else:
-                if not name.ascii or (not name.punycode):
+                if name.ascii or name.punycode:
                     self.out += "::"
+                    name.display()
                     self.out += name.disp
 
         elif tag == "M" or tag == "X" or tag == "Y":
@@ -586,8 +605,11 @@ class Printer(object):
             self.out += "<"
             self.print_sep_list("print_generic_arg", ", ")
             self.out += ">"
+
         elif tag == "B":
-            self.backref_printer().print_path(in_value)
+            prin = self.backref_printer()
+            prin.print_type()
+            self.out = prin.out 
         
         else:
             self.invalid()
@@ -602,11 +624,11 @@ class Printer(object):
             self.print_type()
 
     def print_type(self):
-        tag = self.parser_macro("next_val")
-
+        tag = self.parser_macro("next_func")
         if basic_type(tag):
             ty = basic_type(tag)
             self.out += ty
+            return
 
         if tag == 'R' or tag == 'Q':
             self.out += '&'
@@ -661,7 +683,10 @@ class Printer(object):
                 self.print_lifetime_from_index(lt)
         
         elif tag == 'B':
-            self.backref_printer().print_type()
+            prin = self.backref_printer()
+            prin.print_type()
+            self.out = prin.out
+
         else:
             p = self.parser_mut()
             p.next_val -= 1
@@ -692,7 +717,8 @@ class Printer(object):
                 self.out += ", "
             
             name = self.parser_macro("ident")
-            self.out += name
+            name.display()
+            self.out += name.disp
             self.out += " = "
             self.print_type()
 
@@ -703,13 +729,13 @@ class Printer(object):
         if self.eat('B'):
             return self.backref_printer().print_const()
 
-        ty_tag = self.parser_macro("next_val")
+        ty_tag = self.parser_macro("next_func")
         if ty_tag == 'p':
             self.out += "_"
             return 
         
         type1 = ['h','t','m','y','o','j']
-        type2 = ['a''s','l','x','n','i']
+        type2 = ['a','s','l','x','n','i']
 
         if ty_tag in type1:
             self.print_const_uint()
@@ -721,25 +747,18 @@ class Printer(object):
             self.print_const_char()
         else:
             self.invalid()
-        
-        # if not self.out.alternate():
-        self.out += ": "
-        ty = basic_type(ty_tag)
-        self.out += ty
 
         return 
 
     def print_const_uint(self):
-        hex = self.parser_macro("hex_nibbles")
+        hex_val = self.parser_macro("hex_nibbles")
 
-        if len(hex) > 16:
+        if len(hex_val) > 16:
             self.out += "0x"
-            self.out += hex
+            self.out += hex_val
+            return
 
-        v = 0
-        for c in hex:
-            v = (v<<4) ^ (int(c))
-        self.out += v
+        self.out += str(int(hex_val,16))
 
     def print_const_int(self):
         if self.eat('n'):
@@ -747,27 +766,23 @@ class Printer(object):
         self.print_const_uint()
 
     def print_const_bool(self):
-        hex = self.parser_macro("hex_nibbles")
+        hex_val = self.parser_macro("hex_nibbles")
 
-        if hex == '0':
+        if hex_val == '0':
             self.out += "false"
-        elif hex == '1':
+        elif hex_val == '1':
             self.out += "true"
         else:
             self.invalid()
         
     def print_const_char(self):
-        hex = self.parser_macro("hex_nibbles")
+        hex_val = self.parser_macro("hex_nibbles")
 
-        if len(hex) > 8:
+        if len(hex_val) > 8:
             self.invalid()
-        
-        v = 0
-        for c in hex:
-            v = (v<<4) ^ (int(c))
-        
-        try:
-            c = chr(v)
-            self.out += c
-        except Exception:
-            self.invalid()
+
+        char_val = "0x"
+        char_val += hex_val
+        c = chr(int(char_val,16))
+        self.out += repr(c)
+
