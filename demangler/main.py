@@ -1,10 +1,5 @@
-import sys
 from rust import RustDemangler
 
-def main():
-    inp_str = input()
+def demangle(inp_str: str):
     robj = RustDemangler()
-    print(robj.demangle(inp_str))
-
-if __name__ == '__main__':
-    main()
+    return robj.demangle(inp_str)

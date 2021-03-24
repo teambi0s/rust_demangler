@@ -24,7 +24,7 @@ class LegacyDemangler(object):
             for i in candidate: 
                 if i not in string.hexdigits + "@":
                     raise UnableToLegacyDemangle(inpstr) 
-            inpstr = inpstr[:l]   #removing ThinLTO LLVM internal symbols 
+            inpstr = inpstr[:l]   
 
         inn = inpstr
         for ele in range(self.elements):
@@ -37,16 +37,15 @@ class LegacyDemangler(object):
                 else:
                     break    
             
-            num = int(inn[0:len(inn)-len(rest)]) #the number of char in identifier 
+            num = int(inn[0:len(inn)-len(rest)]) 
 
-            inn = rest[num:]    # the rest of the string
-            rest = rest[:num]   # the current identifier 
+            inn = rest[num:]   
+            rest = rest[:num]   
 
             if ele != 0:
                 disp += "::"
 
-            #hash implementation
-            if ele + 1 == self.elements:  #only considered as hash if it is at end or else it is a normal string
+            if ele + 1 == self.elements:  
                 if self.is_rust_hash(rest):
                     disp += rest
                     break
@@ -56,7 +55,7 @@ class LegacyDemangler(object):
 
             while True:
                 if rest.startswith("."):
-                    if rest[1:].startswith("."):  #If there are two `.` then it is a `::` else it is just `.`
+                    if rest[1:].startswith("."):  
                         disp += "::"
                         rest = rest[2:]
                     else:
@@ -92,12 +91,12 @@ class LegacyDemangler(object):
                     dollar = rest.find("$")
                     dot = rest.find(".")
 
-                    if dollar == -1:        #since find will return -1
+                    if dollar == -1:        
                         disp += rest[:dot]
                         rest = rest[dot:]
                         continue
 
-                    if dot == -1:           #since find will return -1
+                    if dot == -1:           
                         disp += rest[:dollar]
                         rest = rest[dollar:]
                         continue
@@ -110,7 +109,7 @@ class LegacyDemangler(object):
                         rest = rest[dot:]
                 else:
                     break
-            disp += rest    # it is just a word with no `.` or `$`
+            disp += rest    
 
         self.suffix = inn[1:]
         if self.suffix:
@@ -155,7 +154,7 @@ class LegacyDemangler(object):
             if not inpstr[c].isdigit():
                 raise UnableToLegacyDemangle(inpstr)
 
-            while inpstr[c].isdigit():               #basically getting the number to tranverse the string and count num of identifier 
+            while inpstr[c].isdigit():                
                 len = len *10 + int(inpstr[c])
                 c += 1
             
