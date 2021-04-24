@@ -5,13 +5,13 @@ A package for demangling Rust symbols, written in Python.
 Setup
 -----
 ```bash
-pip install rust-demangler
+pip install rust_demangler
 ```
 
 Usage
 -----
 ```py
-from rust-demangler import demangle
+from rust_demangler import demangle
 print(demangle(<mangled_name>))
 ```
 Example 
